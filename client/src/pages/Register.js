@@ -23,11 +23,11 @@ export default function Register() {
   const handleBlur = (e) => setTouched({ ...touched, [e.target.name]: true });
   const show = (field) => (touched[field] ? errors[field] : "");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setTouched({ name: true, email: true, password: true, confirm: true });
     if (hasErrors) return;
-    const result = register(form);
+    const result = await register(form);
     if (!result.ok) return setServerError(result.error);
     navigate("/profile");
   };

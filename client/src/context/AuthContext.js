@@ -1,65 +1,66 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { api, getToken, setToken } from "../utils/api";
 
 /*
-  WEEK 1: users are stored in the browser (localStorage) so the forms work.
-  WEEK 3: replace the functions below with real calls to the Express API
-  (POST /api/auth/register, POST /api/auth/login, PUT /api/users/me).
+  Auth now talks to the Express + MongoDB server:
+    POST /auth/register, POST /auth/login, GET /auth/me, PUT /auth/me
+  The login token is kept in localStorage so the user stays logged in after refresh.
 */
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
-const read = (key, fallback) => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => read("unitrade_current", null));
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(!!getToken());
 
-  const persistCurrent = (u) => {
-    setUser(u);
-    if (u) localStorage.setItem("unitrade_current", JSON.stringify(u));
-    else localStorage.removeItem("unitrade_current");
-  };
+  // On first load: if a token exists, ask the server who the user is.
+  useEffect(() => {
+    if (!getToken()) return;
+    api("/auth/me")
+      .then((data) => setUser(data.user))
+      .catch(() => setToken(null))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const register = ({ name, email, password }) => {
-    const users = read("unitrade_users", []);
-    if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-      return { ok: false, error: "This email is already registered" };
+  const register = async ({ name, email, password }) => {
+    try {
+      const data = await api("/auth/register", { method: "POST", body: { name, email, password } });
+      setToken(data.token);
+      setUser(data.user);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
-    const newUser = { id: Date.now().toString(), name, email, password, phone: "", faculty: "", bio: "" };
-    localStorage.setItem("unitrade_users", JSON.stringify([...users, newUser]));
-    const { password: _pw, ...safe } = newUser;
-    persistCurrent(safe);
-    return { ok: true };
   };
 
-  const login = ({ email, password }) => {
-    const users = read("unitrade_users", []);
-    const found = users.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-    );
-    if (!found) return { ok: false, error: "Incorrect email or password" };
-    const { password: _pw, ...safe } = found;
-    persistCurrent(safe);
-    return { ok: true };
+  const login = async ({ email, password }) => {
+    try {
+      const data = await api("/auth/login", { method: "POST", body: { email, password } });
+      setToken(data.token);
+      setUser(data.user);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   };
 
-  const updateProfile = (changes) => {
-    const users = read("unitrade_users", []);
-    const updated = users.map((u) => (u.id === user.id ? { ...u, ...changes } : u));
-    localStorage.setItem("unitrade_users", JSON.stringify(updated));
-    persistCurrent({ ...user, ...changes });
+  const updateProfile = async (changes) => {
+    try {
+      const data = await api("/auth/me", { method: "PUT", body: changes });
+      setUser(data.user);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   };
 
-  const logout = () => persistCurrent(null);
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, register, login, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, loading, register, login, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

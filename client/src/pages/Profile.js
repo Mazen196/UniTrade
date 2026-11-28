@@ -13,6 +13,7 @@ export default function Profile() {
   });
   const [touched, setTouched] = useState({});
   const [saved, setSaved] = useState(false);
+  const [serverError, setServerError] = useState("");
 
   const errors = { name: validateName(form.name), phone: validatePhone(form.phone) };
   const hasErrors = Object.values(errors).some(Boolean);
@@ -24,12 +25,17 @@ export default function Profile() {
   const handleBlur = (e) => setTouched({ ...touched, [e.target.name]: true });
   const show = (field) => (touched[field] ? errors[field] : "");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setTouched({ name: true, phone: true });
     if (hasErrors) return;
-    updateProfile(form);
-    setSaved(true);
+    const result = await updateProfile(form);
+    if (result.ok) {
+      setServerError("");
+      setSaved(true);
+    } else {
+      setServerError(result.error);
+    }
   };
 
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -46,6 +52,7 @@ export default function Profile() {
         <h2>My profile</h2>
         <p className="subtitle">Update your personal information</p>
         {saved && <div className="alert alert-success">Profile saved successfully</div>}
+        {serverError && <div className="alert">{serverError}</div>}
         <form onSubmit={handleSubmit} noValidate>
           <Field label="Full name" name="name" value={form.name} onChange={handleChange} onBlur={handleBlur} error={show("name")} />
           <Field label="Email (cannot be changed)" name="email" value={user.email} disabled onChange={() => {}} />
